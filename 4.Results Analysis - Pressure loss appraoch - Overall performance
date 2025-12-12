@@ -1,0 +1,124 @@
+## Libraries
+import pandas as pd
+import numpy as np
+import re
+from IPython.display import display
+import matplotlib.pyplot as plt
+from matplotlib.patches import Ellipse
+import warnings
+import math
+import seaborn as sns
+
+
+## Data entry and processing
+
+file_paths = [
+    'C:/Users/alham/Desktop/Main Simulation folders/Gina Krog/Gina Krog_Final_Database.xlsx',
+    'C:/Users/alham/Desktop/Main Simulation folders/Grane/Grane_Final_Database.xlsx',
+    'C:/Users/alham/Desktop/Main Simulation folders/Gullfaks/Gullfaks_Final_Database.xlsx',
+    'C:/Users/alham/Desktop/Main Simulation folders/Heidrun/Heidrun_Final_Database.xlsx',
+    'C:/Users/alham/Desktop/Main Simulation folders/Johan Sverdrup/Johan_Sverdrup_Final_Database.xlsx',
+    'C:/Users/alham/Desktop/Main Simulation folders/Kristin Tyrihans/Kristin_Tyrihans_Final_Database.xlsx',
+    'C:/Users/alham/Desktop/Main Simulation folders/Martin Linge/Martin Linge_Final_Database.xlsx',
+    'C:/Users/alham/Desktop/Main Simulation folders/Njord/Njord_Final_Database.xlsx',
+    'C:/Users/alham/Desktop/Main Simulation folders/Norne/Norne_Final_Database.xlsx',
+    'C:/Users/alham/Desktop/Main Simulation folders/Oseberg/Oseberg_Final_Database.xlsx',
+    'C:/Users/alham/Desktop/Main Simulation folders/Sleipner/Sleipner_Final_Database.xlsx',
+    'C:/Users/alham/Desktop/Main Simulation folders/Snorre/Snorre_Final_Database.xlsx',
+    'C:/Users/alham/Desktop/Main Simulation folders/Statfjord/Statfjord_Final_Database.xlsx',
+    'C:/Users/alham/Desktop/Main Simulation folders/Troll/Troll_Final_Database.xlsx',
+    'C:/Users/alham/Desktop/Main Simulation folders/Valemon/Valemon_Final_Database.xlsx',
+    'C:/Users/alham/Desktop/Main Simulation folders/Vigdis/Vigdis_Final_Database.xlsx',
+    'C:/Users/alham/Desktop/Main Simulation folders/Visund/Visund_Final_Database.xlsx',
+    'C:/Users/alham/Desktop/Main Simulation folders/Åsgard/Åsgard_Final_Database.xlsx',
+    'C:/Users/alham/Desktop/Main Simulation folders/Aasta Hansteen/Aasta Hansteen_Final_Database.xlsx',
+]
+
+dfs = []
+
+for file in file_paths:
+    df = pd.read_excel(file, usecols=range(33))
+    dfs.append(df)
+
+concatenated_df = pd.concat(dfs, ignore_index=True)
+
+raw_df = concatenated_df
+raw_df['Relative error']= (((raw_df['Gauge pressure'] - raw_df['Pressure']) / raw_df['Gauge pressure']).abs())
+raw_df['Deviation']= raw_df['Gauge pressure'] - raw_df['Pressure']
+raw_df['Correlation'] = raw_df['Correlation'].replace('Hydro 3P 19 Hydro3P', 'Hydro 3P', regex=False)
+
+
+raw_df['well test index'] = np.repeat(range(len(raw_df) // 19 + 1), 19)[:len(raw_df)]
+raw_df['well test index'] = np.repeat(range(1, len(raw_df) // 19 + 2), 19)[:len(raw_df)]
+
+indices_to_remove = raw_df[raw_df['Relative error'] > 1]['well test index'].unique()
+raw_df = raw_df[~raw_df['well test index'].isin(indices_to_remove)]
+
+raw_df['Normalized deviation']= (((raw_df['Gauge pressure'] - raw_df['tubing head P']) - (raw_df['Pressure'] - raw_df['tubing head P'])).abs())
+raw_df['Relative error']= raw_df['Normalized deviation']
+
+correlation_list=['Duns and Ross Modified', 'Hagedorn and Brown', 'Fancher and Brown', 'Mukerjee - Brill',
+ 'Beggs and Brill', 'Petroleum Experts', 'Orkizewski', 'Petroleum Experts 2', 'Duns and Ross Original', 
+ 'Petroleum Experts 3', 'GRE (Modified by PE)', 'Petroleum Experts 4', 'Hydro 3P', 'Petroleum Experts 5', 
+ 'Hydro-2P', 'PE 5 (Extended)', 'OLGAS 2P', 'OLGAS 3P', 'OLGAS3P EXT']
+
+
+## Array
+
+pd.set_option('display.max_columns',None)
+pd.set_option('display.max_rows',None)
+#pd.reset_option('display.max_columns')
+pd.reset_option('display.max_rows')
+raw_df
+
+
+## MAPE-WAPE-MAD-SD Calculation
+results_df = pd.DataFrame(columns=['Correlation', 'MAPE', 'WAPE', 'MAD', 'SD'])  
+
+for correlation in correlation_list:
+    filtered_df = raw_df[raw_df['Correlation'] == correlation]
+
+    sum_abs_relative_error = filtered_df['Relative error'].abs().sum()
+    count_rows = len(filtered_df)
+    MAPE = sum_abs_relative_error / count_rows if count_rows else float('inf')
+
+    sum_deviations = filtered_df['Deviation'].abs().sum()
+    sum_GP = filtered_df['Gauge pressure'].sum()
+    WAPE = sum_deviations / sum_GP if sum_GP else float('inf')  
+    MAD = sum_deviations / count_rows if count_rows else float('inf')  
+    SD = filtered_df['Deviation'].std()
+
+    result = pd.DataFrame([[correlation, MAPE, WAPE, MAD, SD]], columns=['Correlation', 'MAPE', 'WAPE', 'MAD', 'SD'])
+    results_df = pd.concat([results_df, result], ignore_index=True)
+
+
+results_df['WAPE'] *= 100
+
+display(results_df)
+## MAPE Plot
+bar_colors = ['#DCDCDC'] * len(results_df)  
+min_mape_correlation = results_df.loc[results_df['MAPE'].idxmin(), 'Correlation']
+max_mape_correlation = results_df.loc[results_df['MAPE'].idxmax(), 'Correlation']
+results_df.sort_values('MAPE', inplace=True)
+min_mape_position = results_df[results_df['Correlation'] == min_mape_correlation].index[0]
+max_mape_position = results_df[results_df['Correlation'] == max_mape_correlation].index[0]
+for ix, correlation in enumerate(results_df['Correlation']):
+    if correlation == min_mape_correlation:
+        bar_colors[ix] = '#4682B4'  
+    if correlation == max_mape_correlation:
+        bar_colors[ix] = '#B22222'  
+
+plt.figure(figsize=(10, 8))
+
+bars = plt.bar(results_df['Correlation'], results_df['MAPE'], color=bar_colors)
+plt.errorbar(results_df['Correlation'], results_df['MAPE'],yerr=results_df['SD'] * 0.03, fmt='none', capsize=5, color='black')
+plt.xticks(rotation=90, ha="right")
+for label in plt.gca().get_xticklabels():
+    if label.get_text() == min_mape_correlation:
+        label.set_fontweight('bold')
+
+plt.title('Overall performance of the different correlations using the pressure loss approach')
+plt.xlabel('Correlation')
+plt.ylabel('MAPE (z)')
+plt.tight_layout()
+plt.show()
