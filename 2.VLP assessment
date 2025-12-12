@@ -1,0 +1,317 @@
+## Libraries
+import pandas as pd
+from openserver import OpenServer
+import numpy as np
+import warnings
+from typing import Dict
+import os
+
+
+
+## Connecting wih Openserver
+c = OpenServer()
+c.connect()
+## Field naming
+#To make sure the Field name is standard
+files={
+0:'"C:/Users/alham/Desktop/Main Simulation folders/Valemon/NO 34_8-A-1.Out"',
+}
+
+for field_path in files.values():
+    field_name = field_path.split("/")[-2]
+    #well_name = field_path.split("/")[-1].rstrip('".Out')    
+## Local Dictionaries
+
+Correlations_labels="DunsandRosModified,HagedornBrown,FancherBrown,MukerjeeBrill,BeggsandBrill,\
+PetroleumExperts,Orkiszewski,PetroleumExperts2,DunsandRosOriginal,PetroleumExperts3,\
+GREmodifiedbyPE,PetroleumExperts4,Hydro3P,PetroleumExperts5,Hydro2P,PE5Extended,\
+OLGAS2P,OLGAS3P,OLGAS3PEXT"
+Correlations_inaction = Correlations_labels.split(",")
+
+Correlation_library = {
+    'DunsandRosModified':0,
+    "HagedornBrown":1 ,
+    'FancherBrown':2,
+    'MukerjeeBrill':3 ,
+    'BeggsandBrill':4 ,
+    'PetroleumExperts':5 ,
+    'Orkiszewski':6 ,
+    'PetroleumExperts2':7 ,
+    'DunsandRosOriginal':8 ,
+    'PetroleumExperts3':9 ,
+    'GREmodifiedbyPE':10 ,
+    'PetroleumExperts4':11,
+    'Hydro3P':12,
+    'PetroleumExperts5':13,
+    'PE 6 (Heavy Oil)':14,
+    'Hydro2P':15,
+    'PE5Extended':16,
+    'OLGAS2P':17,
+    'OLGAS3P':18,
+    'OLGAS3PEXT':19}
+
+Correlations_index={
+    0:'Duns and Ross Modified',
+    1:'Hagedorn and Brown' ,
+    2:'Fancher and Brown',
+    3:'Mukerjee - Brill' ,
+    4:'Beggs and Brill' ,
+    5:'Petroleum Experts' ,
+    6:'Orkizewski' ,
+    7:'Petroleum Experts 2' ,
+    8:'Duns and Ross Original' ,
+    9:'Petroleum Experts 3' ,
+    10:'GRE (Modified by PE)' ,
+    11:'Petroleum Experts 4',
+    12:'Hydro 3P 19 Hydro3P',
+    13:'Petroleum Experts 5',
+    14:'PE 6 (Heavy Oil)',
+    15:'Hydro-2P',
+    16:'PE 5 (Extended)',
+    17:'OLGAS 2P',
+    18:'OLGAS 3P',
+    19:'OLGAS3P EXT'}
+
+fluid_type_index={
+    0:'Oil',
+    1:'Gas' ,
+    2:'Retrograde Condensate'
+    }
+## Oil Function
+def For_Oil(point,Gauge_depth):  
+    #Gathering the Well test data
+    Gauge_pressure=c.DoGet(f'PROSPER.ANL.VMT.Data[{point}].Gpres')
+    tubing_head_pressure=c.DoGet(f'PROSPER.ANL.VMT.Data[{point}].THpres')
+    tubing_head_temperature=c.DoGet(f'PROSPER.ANL.VMT.Data[{point}].THtemp')
+    GOR=c.DoGet(f'PROSPER.ANL.VMT.Data[{point}].GOR')
+    water_cut=c.DoGet(f'PROSPER.ANL.VMT.Data[{point}].WC')
+    liquid_rate=c.DoGet(f'PROSPER.ANL.VMT.Data[{point}].Rate')
+    Reservoir_pressure=c.DoGet(f'PROSPER.ANL.VMT.Data[{point}].Pres')
+    Test_point_date=c.DoGet(f'PROSPER.ANL.VMT.Data[{point}].Date')
+    Field=field_name
+    CGR='Nan'
+    WGR='Nan'
+    Gas_rate='Nan'
+    SGOR='Nan'
+
+    #Setting the gradient method parameters
+    c.DoSet("PROSPER.ANL.GRD.Pres",tubing_head_pressure)
+    c.DoSet("PROSPER.ANL.GRD.WC",water_cut)
+    c.DoSet("PROSPER.ANL.GRD.GOR",GOR)
+    c.DoSet("PROSPER.ANL.GRD.Rate",liquid_rate)
+
+    #c.DoCmd('PROSPER.SAVEFILE')
+    data=[Gauge_depth,Gauge_pressure,tubing_head_pressure,tubing_head_temperature,GOR,water_cut,liquid_rate,CGR,WGR,Gas_rate,SGOR,Reservoir_pressure,Test_point_date,Field]
+        
+    return data
+
+## Gas Function
+def For_Gas(point,Gauge_depth):  
+    #Gathering the Well test data
+    Gauge_pressure=c.DoGet(f'PROSPER.ANL.VMT.Data[{point}].Gpres')
+    tubing_head_pressure=c.DoGet(f'PROSPER.ANL.VMT.Data[{point}].THpres')
+    tubing_head_temperature=c.DoGet(f'PROSPER.ANL.VMT.Data[{point}].THtemp')
+    CGR=c.DoGet(f'PROSPER.ANL.VMT.Data[{point}].CGR')
+    WGR=c.DoGet(f'PROSPER.ANL.VMT.Data[{point}].WGR')
+    Gas_rate=c.DoGet(f'PROSPER.ANL.VMT.Data[{point}].Rate')
+    Reservoir_pressure=c.DoGet(f'PROSPER.ANL.VMT.Data[{point}].Pres')
+    Test_point_date=c.DoGet(f'PROSPER.ANL.VMT.Data[{point}].Date')
+    Field=field_name
+    GOR='Nan'
+    water_cut='Nan'
+    liquid_rate='Nan'
+    SGOR='Nan'
+
+    #Setting the gradient method parameters
+    c.DoSet("PROSPER.ANL.GRD.Pres",tubing_head_pressure)
+    c.DoSet("PROSPER.ANL.GRD.WGR",WGR)
+    c.DoSet("PROSPER.ANL.GRD.CGR",CGR)
+    c.DoSet("PROSPER.ANL.GRD.Rate",Gas_rate)
+
+    data=[Gauge_depth,Gauge_pressure,tubing_head_pressure,tubing_head_temperature,GOR,water_cut,liquid_rate,CGR,WGR,Gas_rate,SGOR,Reservoir_pressure,Test_point_date,Field]
+    
+    return data
+## Retrograde Condensate Function
+def For_Retrograde_Condensate(point,Gauge_depth):  
+    #Gathering the Well test data
+    Gauge_pressure=c.DoGet(f'PROSPER.ANL.VMT.Data[{point}].Gpres')
+    tubing_head_pressure=c.DoGet(f'PROSPER.ANL.VMT.Data[{point}].THpres')
+    tubing_head_temperature=c.DoGet(f'PROSPER.ANL.VMT.Data[{point}].THtemp')
+    SGOR=c.DoGet(f'PROSPER.ANL.VMT.Data[{point}].SGOR')
+    WGR=c.DoGet(f'PROSPER.ANL.VMT.Data[{point}].WGR')
+    Gas_rate=c.DoGet(f'PROSPER.ANL.VMT.Data[{point}].Rate')
+    Reservoir_pressure=c.DoGet(f'PROSPER.ANL.VMT.Data[{point}].Pres')
+    Test_point_date=c.DoGet(f'PROSPER.ANL.VMT.Data[{point}].Date')
+    Field=field_name
+    water_cut='Nan'
+    GOR='Nan'
+    liquid_rate='Nan'
+    CGR='Nan'
+
+    #Setting the gradient method parameters
+    print('Retrossss')
+    c.DoSet("PROSPER.ANL.GRD.Pres",tubing_head_pressure)
+    c.DoSet("PROSPER.ANL.GRD.WGR",WGR)
+    c.DoSet("PROSPER.ANL.GRD.SGR",SGOR)
+    c.DoSet("PROSPER.ANL.GRD.Rate",Gas_rate)
+    
+    data=[Gauge_depth,Gauge_pressure,tubing_head_pressure,tubing_head_temperature,GOR,water_cut,liquid_rate,CGR,WGR,Gas_rate,SGOR,Reservoir_pressure,Test_point_date,Field]
+    
+    return data
+## Well investigated
+#Should be changed by the user, refer to Field&Well guide 
+wells_investigated={
+0: 'NO 34_11-B-2',
+1: 'NO 34_11-B-3',
+2: 'NO 34_11-B-7',
+3: 'NO 34_11-B-9',
+4: 'NO 34_11-B-12',
+5: 'NO 34_11-B-14',
+6: 'NO 34_11-B-15',
+7: 'NO 34_11-B-17',
+8: 'NO 34_11-B-20',
+}
+
+## Main code
+wells_with_errors = []
+
+for wells in wells_investigated:
+    try:
+
+        well_name=wells_investigated[wells]
+        file={
+        0:f'"C:/Users/alham/Desktop/Main Simulation folders/Valemon/{wells_investigated[wells]}.Out"',
+        }
+        #1- Create the main output dataframe
+        df_stored ={}
+        print(file[0])
+        #2- Connect and Open the Prosper file
+        c.DoCmd('PROSPER.START()')
+        c.DoCmd(rf'PROSPER.OPENFILE({file[0]})')
+        Gauge_depth=c.DoGet(f'PROSPER.ANL.VMT.Data[{0}].Gdepth')-1
+        c.DoSet(f'PROSPER.SIN.EQP.Gauge.Data[0].Depth',Gauge_depth)
+
+
+        #3- Count the well test points for the well
+        test_points=c.DoGet("PROSPER.ANL.VMT.DATA.COUNT")
+
+        #4- Deciding the number of test points under investigation
+        for point in range(0,test_points):
+            print(f'Checking point {point+1} out of {test_points}')
+            #5- Get the type of fluid
+            Fluid_type=fluid_type_index[c.DoGet('PROSPER.SIN.SUM.FLUID')]
+            
+            if Fluid_type=='Oil':
+                data=For_Oil(point,Gauge_depth)
+            elif Fluid_type=='Gas':
+                data=For_Gas(point,Gauge_depth)
+            else:
+                data=For_Retrograde_Condensate(point,Gauge_depth)
+
+            #6- Creating the output array
+            Columns=['Field','well name','date','Fluid type','Gauge depth', 'Gauge TVD','Gauge pressure','tubing head P','tubing head T','GOR','CGR','WGR','Gas rate', 'SGOR','water_cut','liquid_rate','Reservoir_pressure','Correlation','Pressure','Temperature','Holdup','dp_friction','dp_gravity','diameter','oil density','gas density','water density', 'liquid density','mixture density','oil viscosity','WH oil viscosity','gas viscosity','WH gas viscosity']
+            df = pd.DataFrame(columns=Columns)
+            units=[
+                ["[-]", "[-]","[-]" ,"[-]","[m]","[m]","[bara]","[bara]","[deg C]","[Sm3/Sm3]","[Sm3/Sm3]","[Sm3/Sm3]","[1000Sm3/day]","[Sm3/Sm3]","[%]","[Sm3/day]","[bara]","[-]", "[bara]","[deg C]","[-]","[bar]","[bar]","inches","[Kg/m3]","[Kg/m3]","[Kg/m3]","[Kg/m3]","[Kg/m3]","[centipoise]","[centipoise]","[centipoise]","[centipoise]"]
+            ]
+            for row_data in units:
+                df.loc[len(df)] = row_data  
+
+
+
+            
+            #7- Working successively on the correlations
+            for Correlation in Correlations_inaction:
+                Correlation_index=Correlation_library[Correlation]
+                c.DoSet("PROSPER.ANL.GRD.TubingLabel",f"{Correlation}")
+                c.DoCmd('PROSPER.ANL.GRD.CALC')
+                warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+                m=c.DoGet(f'PROSPER.OUT.GRD.Results[{Correlation_index}][0][0].Count')
+                depth=c.DoGet(f'PROSPER.OUT.GRD.Results[{Correlation_index}][0][0].MSD[0:{m-1}]')
+                delta=np.abs(depth-Gauge_depth)
+                delta_min=np.argmin(delta)
+                indices = np.where(delta == np.min(delta))[0]
+                index=indices[0]
+
+                depth=c.DoGet(f'PROSPER.OUT.GRD.Results[{Correlation_index}][0][0].MSD[{index}]')
+                TVD=c.DoGet(f'PROSPER.OUT.GRD.Results[{Correlation_index}][0][0].TVD[{index}]')
+                value=c.DoGet(f'PROSPER.OUT.GRD.Results[{Correlation_index}][0][0].PRES[{index}]')
+                diameter=c.DoGet(f'PROSPER.OUT.GRD.Results[{Correlation_index}][0][0].DiaInt[{index}]')
+                temp=c.DoGet(f'PROSPER.OUT.GRD.Results[{Correlation_index}][0][0].Temp[{index}]')                                
+                holdup=c.DoGet(f'PROSPER.OUT.GRD.Results[{Correlation_index}][0][0].Holdup[{index}]')
+                dp_frition=c.DoGet(f'PROSPER.OUT.GRD.Results[{Correlation_index}][0][0].PrFric[{index}]')
+                dp_gravity=c.DoGet(f'PROSPER.OUT.GRD.Results[{Correlation_index}][0][0].PrStat[{index}]')    
+                oil_density=c.DoGet(f'PROSPER.OUT.GRD.Results[{Correlation_index}][0][0].RhoOil[{index}]')
+                gas_density=c.DoGet(f'PROSPER.OUT.GRD.Results[{Correlation_index}][0][0].RhoGas[{index}]') 
+                water_density=c.DoGet(f'PROSPER.OUT.GRD.Results[{Correlation_index}][0][0].RhoWat[{index}]')
+                liquid_density=c.DoGet(f'PROSPER.OUT.GRD.Results[{Correlation_index}][0][0].RhoLiq[{index}]')
+                mixture_density=c.DoGet(f'PROSPER.OUT.GRD.Results[{Correlation_index}][0][0].RhoMix[{index}]')    
+                oil_viscosity=c.DoGet(f'PROSPER.OUT.GRD.Results[{Correlation_index}][0][0].FmuOil[{index}]')  
+                gas_viscosity=c.DoGet(f'PROSPER.OUT.GRD.Results[{Correlation_index}][0][0].FmuGas[{index}]') 
+                WH_oil_viscosity=c.DoGet(f'PROSPER.OUT.GRD.Results[{Correlation_index}][0][0].FmuOil[0]')
+                WH_gas_viscosity=c.DoGet(f'PROSPER.OUT.GRD.Results[{Correlation_index}][0][0].FmuGas[0]')
+
+                data_to_add = [
+                        [field_name, well_name, data[12],Fluid_type,data[0],TVD,data[1],data[2],data[3],data[4],data[7], data[8], data[9], data[10], data[5],data[6],data[11],Correlations_index[Correlation_index], value, temp,holdup,dp_frition,dp_gravity,diameter,oil_density,gas_density,water_density, liquid_density, mixture_density, oil_viscosity,WH_oil_viscosity,gas_viscosity, WH_gas_viscosity]
+                                    ]
+                for row_data in data_to_add:
+                    df.loc[len(df)] = row_data 
+
+                
+                df_stored[f"df_{point}"] = df
+        df_list = []  
+        for i in range(1000):
+            key_name = 'df_' + str(i)
+            if key_name in df_stored:  
+                df_list.append(df_stored[key_name])  
+
+        
+        merged_df = pd.concat(df_list, axis=0, ignore_index=True)
+        merged_df.to_excel(f'{well_name}_excelfile.xlsx', index=False)
+        merged_df
+
+    except Exception as e:
+        wells_with_errors.append(well_name)
+        continue 
+    
+
+## Data retrieval in case of an error
+print(wells_with_errors)
+#pd.set_option('display.max_columns', None)
+#pd.set_option('display.max_rows', None)
+
+#dataframes = [df_stored[f'df_{i}'] for i in range(0, 68)]
+#merged_dataframe = pd.concat(dataframes, ignore_index=True)
+
+import winsound
+
+winsound.MessageBeep(winsound.MB_ICONHAND)
+
+frequency = 1000 
+duration = 1000   
+winsound.Beep(frequency, duration)
+## Specific Well test Output display
+import pandas as pd
+pd.set_option('display.max_columns',None)
+df_stored["df_0"]
+
+#df.iloc[1:]
+
+## Merged Output Dataframe display
+#df_list = []  # create an empty list to store dataframes
+#for i in range(300):
+    #key_name = 'df_' + str(i)
+    #if key_name in df_stored:  # check if key exists in dictionary
+        #df_list.append(df_stored[key_name])  # add dataframe to list
+
+# concatenate all dataframes in the list
+#merged_df = pd.concat(df_list, axis=0, ignore_index=True)
+
+#merged_df
+
+## Data storage in an excel file
+#merged_df.to_excel(f'{well_name}_excelfile.xlsx', index=False)
+## Disconnecting with OpenServer
+c.disconnect()
+#c.DoCmd("PROSPER.SHUTDOWN")
