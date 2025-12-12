@@ -1,0 +1,134 @@
+## Libraries
+import pandas as pd
+import numpy as np
+import re
+from IPython.display import display
+import matplotlib.pyplot as plt
+from matplotlib.patches import Ellipse
+import warnings
+import math
+import seaborn as sns
+
+## Array and correlations
+
+file_paths = [
+    'C:/Users/alham/Desktop/Main Simulation folders/Gina Krog/Gina Krog_Final_Database.xlsx',
+    'C:/Users/alham/Desktop/Main Simulation folders/Grane/Grane_Final_Database.xlsx',
+    'C:/Users/alham/Desktop/Main Simulation folders/Gullfaks/Gullfaks_Final_Database.xlsx',
+    'C:/Users/alham/Desktop/Main Simulation folders/Heidrun/Heidrun_Final_Database.xlsx',
+    'C:/Users/alham/Desktop/Main Simulation folders/Johan Sverdrup/Johan_Sverdrup_Final_Database.xlsx',
+    'C:/Users/alham/Desktop/Main Simulation folders/Kristin Tyrihans/Kristin_Tyrihans_Final_Database.xlsx',
+    'C:/Users/alham/Desktop/Main Simulation folders/Martin Linge/Martin Linge_Final_Database.xlsx',
+    'C:/Users/alham/Desktop/Main Simulation folders/Njord/Njord_Final_Database.xlsx',
+    'C:/Users/alham/Desktop/Main Simulation folders/Norne/Norne_Final_Database.xlsx',
+    'C:/Users/alham/Desktop/Main Simulation folders/Oseberg/Oseberg_Final_Database.xlsx',
+    'C:/Users/alham/Desktop/Main Simulation folders/Sleipner/Sleipner_Final_Database.xlsx',
+    'C:/Users/alham/Desktop/Main Simulation folders/Snorre/Snorre_Final_Database.xlsx',
+    'C:/Users/alham/Desktop/Main Simulation folders/Statfjord/Statfjord_Final_Database.xlsx',
+    'C:/Users/alham/Desktop/Main Simulation folders/Troll/Troll_Final_Database.xlsx',
+    'C:/Users/alham/Desktop/Main Simulation folders/Valemon/Valemon_Final_Database.xlsx',
+    'C:/Users/alham/Desktop/Main Simulation folders/Vigdis/Vigdis_Final_Database.xlsx',
+    'C:/Users/alham/Desktop/Main Simulation folders/Visund/Visund_Final_Database.xlsx',
+    'C:/Users/alham/Desktop/Main Simulation folders/Åsgard/Åsgard_Final_Database.xlsx',
+    'C:/Users/alham/Desktop/Main Simulation folders/Aasta Hansteen/Aasta Hansteen_Final_Database.xlsx',
+]
+
+dfs = []
+
+for file in file_paths:
+    df = pd.read_excel(file, usecols=range(33))
+    dfs.append(df)
+
+concatenated_df = pd.concat(dfs, ignore_index=True)
+
+raw_df = concatenated_df
+raw_df['Relative error']= (((raw_df['Gauge pressure'] - raw_df['Pressure']) / raw_df['Gauge pressure']).abs())
+raw_df['Deviation']= raw_df['Gauge pressure'] - raw_df['Pressure']
+raw_df['Deviation']= raw_df['Gauge pressure'] - raw_df['Pressure']
+raw_df['Correlation'] = raw_df['Correlation'].replace('Hydro 3P 19 Hydro3P', 'Hydro 3P', regex=False)
+
+
+raw_df['well test index'] = np.repeat(range(len(raw_df) // 19 + 1), 19)[:len(raw_df)]
+raw_df['well test index'] = np.repeat(range(1, len(raw_df) // 19 + 2), 19)[:len(raw_df)]
+
+indices_to_remove = raw_df[raw_df['Relative error'] > 1]['well test index'].unique()
+raw_df = raw_df[~raw_df['well test index'].isin(indices_to_remove)]
+
+correlation_list=['Duns and Ross Modified', 'Hagedorn and Brown', 'Fancher and Brown', 'Mukerjee - Brill',
+ 'Beggs and Brill', 'Petroleum Experts', 'Orkizewski', 'Petroleum Experts 2', 'Duns and Ross Original', 
+ 'Petroleum Experts 3', 'GRE (Modified by PE)', 'Petroleum Experts 4', 'Hydro 3P', 'Petroleum Experts 5', 
+ 'Hydro-2P', 'PE 5 (Extended)', 'OLGAS 2P', 'OLGAS 3P', 'OLGAS3P EXT']
+
+
+## Polynomial , Random Forest, and XGBoost Regressor - Pressure prediction 
+import numpy as np
+import pandas as pd
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.linear_model import LinearRegression
+from sklearn.pipeline import Pipeline
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import r2_score
+from xgboost import XGBRegressor
+
+raw_df = raw_df[raw_df['Fluid type'] == 'Oil']
+
+features = ['Gauge depth', 'tubing head P', 'water_cut', 'GOR', 'liquid_rate']
+target = 'Pressure'
+X = raw_df[features]
+y = raw_df[target]
+imputer = SimpleImputer(strategy='mean')
+X_transformed = imputer.fit_transform(X)
+
+# Model 1: Polynomial Regression
+poly_degree = 5
+polynomial_features = PolynomialFeatures(degree=poly_degree, include_bias=False)
+linear_regression = LinearRegression()
+pipeline_poly = Pipeline([
+    ("polynomial_features", polynomial_features),
+    ("linear_regression", linear_regression)
+])
+
+# Model 2: Random Forest
+random_forest = RandomForestRegressor(n_estimators=100)
+pipeline_rf = Pipeline([
+    ("random_forest", random_forest)
+])
+
+# Model 3: XGBoost Regressor
+xgb_regressor = XGBRegressor(n_estimators=100)
+pipeline_xgb = Pipeline([
+    ("xgb_regressor", xgb_regressor)
+])
+
+
+pipeline_poly.fit(X_transformed, y)
+pipeline_rf.fit(X_transformed, y)
+pipeline_xgb.fit(X_transformed, y)
+
+y_pred_poly = pipeline_poly.predict(X_transformed)
+y_pred_rf = pipeline_rf.predict(X_transformed)
+y_pred_xgb = pipeline_xgb.predict(X_transformed)
+
+y_pred_combined = (y_pred_poly + y_pred_rf + y_pred_xgb) / 3
+r_squared_combined = r2_score(y, y_pred_combined)
+print("Updated Combined R-squared:", r_squared_combined)
+
+new_data = {
+    'Gauge depth': [2630.0],
+    'tubing head P': [299.399988585],   
+    'water_cut': [7.73176527],
+    'GOR': [1477.084517188],
+    'liquid_rate': [1241.631037501]
+}
+
+new_input_df = pd.DataFrame(new_data, columns=features)
+new_input_transformed = imputer.transform(new_input_df)
+
+new_pred_poly = pipeline_poly.predict(new_input_transformed)
+new_pred_rf = pipeline_rf.predict(new_input_transformed)
+new_pred_xgb = pipeline_xgb.predict(new_input_transformed)
+
+new_pred_combined = (new_pred_poly + new_pred_rf + new_pred_xgb) / 3
+predicted_pressure = new_pred_combined[0]
+print("Updated Predicted Pressure:", predicted_pressure)
