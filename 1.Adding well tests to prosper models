@@ -1,0 +1,219 @@
+## Libraries
+import pandas as pd
+from openserver import OpenServer
+import re
+from natsort import index_natsorted, order_by_index, natsorted, ns
+
+## Fluid index 
+fluid_type_index={
+    0:'Oil',
+    1:'Gas' ,
+    2:'Retrograde Condensate'
+    }
+## Main code 
+def filter_rows(group):
+    average = group['BHP [barg]'].mean()  
+    return group[(group['BHP [barg]'] >= 20)]
+
+
+def open_well_test_data():
+    file_path = 'C:/Users/alham/Downloads/PowerBI_Snorre.xlsx'
+    df_test_points = pd.read_excel(file_path)
+    df_test_points['Wellbore'] =df_test_points['Wellbore'].str.rsplit(' ',n=1).str[0]
+    df_test_points['Wellbore'] =df_test_points['Wellbore'].str.replace('/', '_')
+    df_test_points.fillna(0, inplace=True) 
+    WHP_condition=df_test_points['WHP [barg]']<1
+    df_test_points=df_test_points[~WHP_condition]
+
+    df_test_points['Date'] = pd.to_datetime(df_test_points['Date'])
+    sorter_index = dict(zip(natsorted(df_test_points['Wellbore']), range(len(df_test_points['Wellbore']))))
+    df_test_points['Wellbore_rank'] = df_test_points['Wellbore'].map(sorter_index)
+    df_test_points= df_test_points.sort_values(by=['Wellbore_rank', 'Date'])
+    df_test_points= df_test_points.drop('Wellbore_rank', axis=1)
+
+    df_test_points = df_test_points[(df_test_points['Watercut [%]'] >= 0) & (df_test_points['Watercut [%]'] <= 100)]
+    df_test_points = df_test_points[(df_test_points['GOR [Sm³/Sm³]'] >= 0) & (df_test_points['GOR [Sm³/Sm³]'] <= 177200)]
+    df_test_points = df_test_points[(df_test_points['WHT [°C]'] >= -17.7778) & (df_test_points['WHT [°C]'] <= 1648)]
+    df_test_points = df_test_points.loc[(df_test_points["Oil [Sm³/d]"] != 0) | (df_test_points["Gas [Sm³/d]"] != 0)]
+    df_test_points = df_test_points.loc[(df_test_points["BHP [barg]"] < 30)]
+    df_test_points = df_test_points.loc[(df_test_points["Watercut [%]"] != 0)]
+    df_test_points['Gas [Sm³/d]']=df_test_points['Gas [Sm³/d]'].div(1000)
+    df_test_points=df_test_points.rename(columns={'Gas [Sm³/d]':'Gas [1000Sm³/d]'})
+
+    df_test_points= df_test_points.groupby('Wellbore').apply(filter_rows).reset_index(drop=True)
+
+
+    df_test_points = df_test_points.reset_index(drop=True)
+    return df_test_points
+## Panda array
+df=open_well_test_data()
+pd.set_option('display.max_columns',None)
+pd.set_option('display.max_rows',None)
+pd.reset_option('display.max_columns')
+pd.reset_option('display.max_rows')
+df
+## Creating the well tests dictionary
+#num_rows = len(df)
+unique_values = df['Wellbore'].unique()
+well_tests_dictionary = {i: v for i, v in enumerate(unique_values)}
+num_well_tests = len(well_tests_dictionary)
+
+print(well_tests_dictionary)
+print(num_well_tests)
+
+
+## Checking Prosper model and Gauge depth availability 
+missing_files=[]
+
+c = OpenServer()
+c.connect()
+
+for welltests in range (0,num_well_tests):
+    c.DoCmd('PROSPER.START()')
+    wellname=well_tests_dictionary[welltests]
+    filename=rf'C:/Users/alham/Desktop/Main Simulation folders/Statfjord/{wellname}.Out'
+    try:
+        c.DoCmd(rf'PROSPER.OPENFILE("{filename}")')
+        Gdepth_control=c.DoGet('PROSPER.ANL.VMT.Data[0].Gdepth')
+        print(Gdepth_control)
+        print(f"Tracker {welltests}")
+        if int(Gdepth_control)==0:
+            index=welltests
+            missing_files.append(index)
+            welltests += 1
+    except ValueError:  
+        print(f"{wellname} does not have an already produced propser model")
+        index=welltests
+        print(f"{index} was here")
+        missing_files.append(index)
+        welltests += 1
+
+    c.DoCmd("PROSPER.SHUTDOWN")
+
+    
+
+print(missing_files)
+c.disconnect()
+
+## Getting the occurence of the same well test
+start_indices={}
+end_indices={}
+
+def get_start_to_end_indices(wellname):
+    indices=df.index[df['Wellbore'] == f'{wellname}'].tolist()
+    start_index = min(indices) if indices else None
+    end_index = max(indices) if indices else None
+    print(f"for well test {welltests} start index= {start_index} and end index= {end_index}")
+    start_indices[welltests]=start_index
+    end_indices[welltests]=end_index
+
+
+for welltests in range (0,num_well_tests):
+    if welltests not in missing_files:
+        wellname=well_tests_dictionary[welltests]
+        get_start_to_end_indices(wellname)
+
+## Oil case
+def for_Oil():
+    start=start_indices[welltests]
+    end=end_indices[welltests]
+    points_to_be_added=end-start+1
+    for j in range(0,points_to_be_added):
+        date=df.iloc[start,1]
+        Label=df.iloc[start,2]
+        THpres=df.iloc[start,10]
+        THtemp=df.iloc[start,11]
+        WC=df.iloc[start,8]
+        Rate=df.iloc[start,3]+df.iloc[start,6]+df.iloc[start,4]
+        Gpres=df.iloc[start,12]
+        GOR=df.iloc[start,7]
+        GORfree=0
+        c.DoSet(f"PROSPER.ANL.VMT.Data[{j}].Date",date)
+        c.DoSet(f"PROSPER.ANL.VMT.Data[{j}].Label",Label)
+        c.DoSet(f"PROSPER.ANL.VMT.Data[{j}].THpres",THpres)
+        c.DoSet(f"PROSPER.ANL.VMT.Data[{j}].THtemp",THtemp)
+        c.DoSet(f"PROSPER.ANL.VMT.Data[{j}].WC",WC)
+        c.DoSet(f"PROSPER.ANL.VMT.Data[{j}].Rate",Rate)
+        c.DoSet(f"PROSPER.ANL.VMT.Data[{j}].Gdepth",Gdepth)
+        c.DoSet(f"PROSPER.ANL.VMT.Data[{j}].Gpres",Gpres)
+        c.DoSet(f"PROSPER.ANL.VMT.Data[{j}].GOR",GOR)
+        c.DoSet(f"PROSPER.ANL.VMT.Data[{j}].GORfree",GORfree)
+        c.DoCmd(f"PROSPER.SAVEFILE")
+        start+=1
+
+## Gas case
+def for_Gas():
+    start=start_indices[welltests]
+    end=end_indices[welltests]
+    points_to_be_added=end-start+1
+    for j in range(0,points_to_be_added):
+        date=df.iloc[start,1]
+        Label=df.iloc[start,2]
+        THpres=df.iloc[start,10]
+        THtemp=df.iloc[start,11]
+        WGR=df.iloc[start,6]/(df.iloc[start,5]*1000)
+        CGR=df.iloc[start,4]/(df.iloc[start,5]*1000)
+        Rate=df.iloc[start,5]
+        Gpres=df.iloc[start,12]
+        c.DoSet(f"PROSPER.ANL.VMT.Data[{j}].Date",date)
+        c.DoSet(f"PROSPER.ANL.VMT.Data[{j}].Label",Label)
+        c.DoSet(f"PROSPER.ANL.VMT.Data[{j}].THpres",THpres)
+        c.DoSet(f"PROSPER.ANL.VMT.Data[{j}].THtemp",THtemp)
+        c.DoSet(f"PROSPER.ANL.VMT.Data[{j}].WGR",WGR)
+        c.DoSet(f"PROSPER.ANL.VMT.Data[{j}].CGR",CGR)
+        c.DoSet(f"PROSPER.ANL.VMT.Data[{j}].Rate",Rate)
+        c.DoSet(f"PROSPER.ANL.VMT.Data[{j}].Gdepth",Gdepth)
+        c.DoSet(f"PROSPER.ANL.VMT.Data[{j}].Gpres",Gpres)
+        c.DoCmd(f"PROSPER.SAVEFILE")
+        start+=1
+
+## Retrograde Condensate case
+def for_Retrograde_Condensate():
+    start=start_indices[welltests]
+    end=end_indices[welltests]
+    points_to_be_added=end-start+1
+    for j in range(0,points_to_be_added):
+        date=df.iloc[start,1]
+        Label=df.iloc[start,2]
+        THpres=df.iloc[start,10]
+        THtemp=df.iloc[start,11]
+        WGR=df.iloc[start,6]/(df.iloc[start,5]*1000)
+        SGOR=df.iloc[start,7]
+        Rate=df.iloc[start,5]
+        Gpres=df.iloc[start,12]
+        c.DoSet(f"PROSPER.ANL.VMT.Data[{j}].Date",date)
+        c.DoSet(f"PROSPER.ANL.VMT.Data[{j}].Label",Label)
+        c.DoSet(f"PROSPER.ANL.VMT.Data[{j}].THpres",THpres)
+        c.DoSet(f"PROSPER.ANL.VMT.Data[{j}].THtemp",THtemp)
+        c.DoSet(f"PROSPER.ANL.VMT.Data[{j}].WGR",WGR)
+        c.DoSet(f"PROSPER.ANL.VMT.Data[{j}].SGOR",SGOR)
+        c.DoSet(f"PROSPER.ANL.VMT.Data[{j}].Rate",Rate)
+        c.DoSet(f"PROSPER.ANL.VMT.Data[{j}].Gdepth",Gdepth)
+        c.DoSet(f"PROSPER.ANL.VMT.Data[{j}].Gpres",Gpres)
+        c.DoCmd(f"PROSPER.SAVEFILE")
+        start+=1
+
+## Adding the well tests to PROSPER
+
+c = OpenServer()
+c.connect()
+for welltests in range (0,num_well_tests):
+    if welltests not in missing_files:
+        c.DoCmd('PROSPER.START()')
+        wellname=well_tests_dictionary[welltests]
+        filename=rf'C:/Users/alham/Desktop/Main Simulation folders/Statfjord/{wellname}.Out'
+        c.DoCmd(rf'PROSPER.OPENFILE("{filename}")')
+        Fluid_type=c.DoGet('PROSPER.SIN.SUM.FLUID')
+        Fluid=fluid_type_index[Fluid_type]
+        Gdepth=c.DoGet('PROSPER.ANL.VMT.Data[0].Gdepth')
+        if Fluid=='Oil':
+            for_Oil()
+        elif Fluid=='Gas':
+            for_Gas()
+        else:
+            for_Retrograde_Condensate()
+    
+
+c.disconnect()
+## Disconnecting OpenServer
+c.disconnect()
