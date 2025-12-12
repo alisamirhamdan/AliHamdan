@@ -1,15 +1,15 @@
 
-** 1. Adding Well Tests to Prosper Models **
+**1. Adding Well Tests to Prosper Models **
 
 The user only needs to input the main field's well test data file path into the "Main code" section.
 Additional information about this script can be found in the thesis.
 
-** 2. VLP Assessment **
+**2. VLP Assessment **
 
 The user should input the file path where the specific field's Prosper models are located on their computer into the "Main code" section and change the well tests being investigated.
 Additional information about this script can be found in the thesis.
 
-** 3. Results Analysis and 4. Results Analysis - Pressure Loss Approach - Overall Performance **
+**3. Results Analysis and 4. Results Analysis - Pressure Loss Approach - Overall Performance **
 
 The user should input the file paths of all the fields included in this study, as shown in the "Data entry and processing" section.
 Additional information about these scripts can be found in the thesis.
